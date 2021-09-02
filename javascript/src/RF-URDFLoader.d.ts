@@ -9,7 +9,7 @@ interface MeshLoadFunc{
     (url: string, manager: LoadingManager, onLoad: MeshLoadDoneFunc): void;
 }
 
-export default class URDFLoader {
+export default class RF_URDFLoader {
 
     manager: LoadingManager;
     defaultMeshLoader: MeshLoadFunc;
@@ -17,6 +17,7 @@ export default class URDFLoader {
     // options
     fetchOptions: Object;
     workingPath: string;
+    URLPostfix: string;
     parseVisual: boolean;
     parseCollision: boolean;
     packages: string | { [key: string]: string } | ((targetPkg: string) => string);

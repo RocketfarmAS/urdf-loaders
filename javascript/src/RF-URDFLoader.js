@@ -54,7 +54,7 @@ function applyRotation(obj, rpy, additive = false) {
 /* URDFLoader Class */
 // Loads and reads a URDF file into a THREEjs Object3D format
 export default
-class URDFLoader {
+class RF_URDFLoader {
 
     constructor(manager) {
 
@@ -65,6 +65,8 @@ class URDFLoader {
         this.packages = '';
         this.workingPath = '';
         this.fetchOptions = {};
+
+        this.URLPostfix = '';
 
     }
 
@@ -86,8 +88,9 @@ class URDFLoader {
         // Check if a full URI is specified before
         // prepending the package info
         const manager = this.manager;
-        const workingPath = THREE.LoaderUtils.extractUrlBase(urdf);
-        const urdfPath = this.manager.resolveURL(urdf);
+        // If not set manually, then fetch.
+        const workingPath = ((this.workingPath === '') ? THREE.LoaderUtils.extractUrlBase(urdf) : this.workingPath);
+        const urdfPath = this.manager.resolveURL(urdf + ((urdf.startsWith(workingPath)) ? this.URLPostfix : ''));
 
         manager.itemStart(urdfPath);
 
@@ -148,6 +151,7 @@ class URDFLoader {
         const parseVisual = this.parseVisual;
         const parseCollision = this.parseCollision;
         const workingPath = this.workingPath;
+        const URLPostfix = this.URLPostfix;
         const manager = this.manager;
         const linkMap = {};
         const jointMap = {};
@@ -156,49 +160,14 @@ class URDFLoader {
         // Resolves the path of mesh files
         function resolvePath(path) {
 
-            if (!/^package:\/\//.test(path)) {
-
-                return workingPath ? workingPath + path : path;
-
+            if (/^package:\/\//.test(path)) {
+                // Remove "package://" keyword
+                path = path.replace(/^package:\/\//, '');
             }
 
-            // Remove "package://" keyword and split meshPath at the first slash
-            const [targetPkg, relPath] = path.replace(/^package:\/\//, '').split(/\/(.+)/);
-
-            if (typeof packages === 'string') {
-
-                // "pkg" is one single package
-                if (packages.endsWith(targetPkg)) {
-
-                    // "pkg" is the target package
-                    return packages + '/' + relPath;
-
-                } else {
-
-                    // Assume "pkg" is the target package's parent directory
-                    return packages + '/' + targetPkg + '/' + relPath;
-
-                }
-
-            } else if (packages instanceof Function) {
-
-                return packages(targetPkg) + '/' + relPath;
-
-            } else if (typeof packages === 'object') {
-
-                // "pkg" is a map of packages
-                if (targetPkg in packages) {
-
-                    return packages[targetPkg] + '/' + relPath;
-
-                } else {
-
-                    console.error(`URDFLoader : ${ targetPkg } not found in provided package list.`);
-                    return null;
-
-                }
-
-            }
+            const tempURL = ((workingPath) ? workingPath + path : path);
+            // Add URLPostfix if the location is the same as working path.
+            return tempURL + ((tempURL.startsWith(workingPath)) ? URLPostfix : '');
 
         }
 
@@ -640,7 +609,7 @@ class URDFLoader {
     // Default mesh loading function
     defaultMeshLoader(path, manager, done) {
 
-        if (/\.stl$/i.test(path)) {
+        if (/\.stl/i.test(path)) {
 
             const loader = new STLLoader(manager);
             loader.load(path, geom => {
@@ -648,7 +617,7 @@ class URDFLoader {
                 done(mesh);
             });
 
-        } else if (/\.dae$/i.test(path)) {
+        } else if (/\.dae/i.test(path)) {
 
             const loader = new ColladaLoader(manager);
             loader.load(path, dae => done(dae.scene));

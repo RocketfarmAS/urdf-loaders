@@ -13,9 +13,9 @@
         "strictNullChecks":true
     },
     "files": [
-        "src/URDFLoader.d.ts"
+        "src/RF-URDFLoader.d.ts"
     ],
     "exclude": [
-      "node_modules"
+        "node_modules",
     ]
 }

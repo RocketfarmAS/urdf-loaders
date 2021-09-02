@@ -1,7 +1,7 @@
 {
-  "name": "urdf-loader",
-  "version": "0.12.3",
-  "description": "URDF Loader for THREE.js and webcomponent viewer",
+  "name": "rf-urdf-loader",
+  "version": "0.12.0",
+  "description": "Rocketfarm specific URDF Loader for THREE.js and webcomponent viewer.",
   "main": "src/URDFLoader.js",
   "type": "module",
   "scripts": {
@@ -19,12 +19,12 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/gkjohnson/urdf-loaders.git"
+    "url": "git+https://github.com/RocketfarmAS/urdf-loaders.git"
   },
   "bugs": {
-    "url": "https://github.com/gkjohnson/urdf-loaders/issues"
+    "url": "https://github.com/RocketfarmAS/urdf-loaders/issues"
   },
-  "homepage": "https://github.com/gkjohnson/urdf-loaders#readme",
+  "homepage": "https://github.com/RocketfarmAS/urdf-loaders#readme",
   "keywords": [
     "javascript",
     "threejs",
