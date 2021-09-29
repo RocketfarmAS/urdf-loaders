@@ -17,10 +17,10 @@ export default class RF_URDFLoader {
     // options
     fetchOptions: Object;
     workingPath: string;
-    URLPostfix: string;
     parseVisual: boolean;
     parseCollision: boolean;
     packages: string | { [key: string]: string } | ((targetPkg: string) => string);
+    queryStringOptions: [string, string][];
     loadMeshCb: MeshLoadFunc;
 
     constructor(manager?: LoadingManager);

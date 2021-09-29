@@ -2,7 +2,7 @@
   "name": "@rocketfarm/urdf-loader",
   "version": "0.12.0",
   "description": "Rocketfarm specific URDF Loader for THREE.js and webcomponent viewer.",
-  "main": "src/RF-URDFLoader.js",
+  "main": "src/URDFLoader.js",
   "type": "module",
   "scripts": {
     "start": "concurrently \"parcel watch ./example/*.html --out-dir ./example/dev-bundle/ --public-url . --no-cache\" \"cd .. && static-server\"",

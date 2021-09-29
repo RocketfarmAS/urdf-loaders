@@ -51,6 +51,17 @@ function applyRotation(obj, rpy, additive = false) {
 
 }
 
+// Resolves query string parameters for any given paths that needs them
+function resolveQueryString(path, queryStringOptions) {
+    for (const [key, token] of queryStringOptions) {
+        if (path.startsWith(key)) {
+            return token;
+        }
+    }
+
+    return '';
+}
+
 /* URDFLoader Class */
 // Loads and reads a URDF file into a THREEjs Object3D format
 export default
@@ -65,9 +76,7 @@ class RF_URDFLoader {
         this.packages = '';
         this.workingPath = '';
         this.fetchOptions = {};
-
-        this.URLPostfix = '';
-
+        this.queryStringOptions = [];
     }
 
     /* Public API */
@@ -90,7 +99,7 @@ class RF_URDFLoader {
         const manager = this.manager;
         // If not set manually, then fetch.
         const workingPath = ((this.workingPath === '') ? THREE.LoaderUtils.extractUrlBase(urdf) : this.workingPath);
-        const urdfPath = this.manager.resolveURL(urdf + ((urdf.startsWith(workingPath)) ? this.URLPostfix : ''));
+        const urdfPath = this.manager.resolveURL(urdf + resolveQueryString(urdf, this.queryStringOptions));
 
         manager.itemStart(urdfPath);
 
@@ -151,23 +160,63 @@ class RF_URDFLoader {
         const parseVisual = this.parseVisual;
         const parseCollision = this.parseCollision;
         const workingPath = this.workingPath;
-        const URLPostfix = this.URLPostfix;
         const manager = this.manager;
         const linkMap = {};
         const jointMap = {};
         const materialMap = {};
+        const queryStringOptions = this.queryStringOptions;
 
         // Resolves the path of mesh files
         function resolvePath(path) {
 
-            if (/^package:\/\//.test(path)) {
-                // Remove "package://" keyword
-                path = path.replace(/^package:\/\//, '');
+            if (!/^package:\/\//.test(path)) {
+
+                let plainURL = workingPath ? workingPath + path : path;
+                return plainURL + resolveQueryString(plainURL, queryStringOptions);
+
             }
 
-            const tempURL = ((workingPath) ? workingPath + path : path);
-            // Add URLPostfix if the location is the same as working path.
-            return tempURL + ((tempURL.startsWith(workingPath)) ? URLPostfix : '');
+            // Remove "package://" keyword and split meshPath at the first slash
+            const [targetPkg, relPath] = path.replace(/^package:\/\//, '').split(/\/(.+)/);
+
+            if (typeof packages === 'string') {
+
+                // "pkg" is one single package
+                if (packages.endsWith(targetPkg)) {
+
+                    // "pkg" is the target package
+                    let plainURL = packages + '/' + relPath;
+                    return plainURL + resolveQueryString(plainURL, queryStringOptions);
+
+                } else {
+
+                    // Assume "pkg" is the target package's parent directory
+                    let plainURL = packages + '/' + targetPkg + '/' + relPath;
+                    return plainURL + resolveQueryString(plainURL, queryStringOptions);
+
+                }
+
+            } else if (packages instanceof Function) {
+
+                let plainURL = packages(targetPkg) + '/' + relPath;
+                return plainURL + resolveQueryString(plainURL, queryStringOptions);
+
+            } else if (typeof packages === 'object') {
+
+                // "pkg" is a map of packages
+                if (targetPkg in packages) {
+
+                    let plainURL = packages[targetPkg] + '/' + relPath;
+                    return plainURL + resolveQueryString(plainURL, queryStringOptions);
+
+                } else {
+
+                    console.error(`URDFLoader : ${ targetPkg } not found in provided package list.`);
+                    return null;
+
+                }
+
+            }
 
         }
 
