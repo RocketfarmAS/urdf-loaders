@@ -171,7 +171,7 @@ class RF_URDFLoader {
 
             if (!/^package:\/\//.test(path)) {
 
-                let plainURL = workingPath ? workingPath + path : path;
+                const plainURL = workingPath ? workingPath + path : path;
                 return plainURL + resolveQueryString(plainURL, queryStringOptions);
 
             }
@@ -185,20 +185,20 @@ class RF_URDFLoader {
                 if (packages.endsWith(targetPkg)) {
 
                     // "pkg" is the target package
-                    let plainURL = packages + '/' + relPath;
+                    const plainURL = packages + '/' + relPath;
                     return plainURL + resolveQueryString(plainURL, queryStringOptions);
 
                 } else {
 
                     // Assume "pkg" is the target package's parent directory
-                    let plainURL = packages + '/' + targetPkg + '/' + relPath;
+                    const plainURL = packages + '/' + targetPkg + '/' + relPath;
                     return plainURL + resolveQueryString(plainURL, queryStringOptions);
 
                 }
 
             } else if (packages instanceof Function) {
 
-                let plainURL = packages(targetPkg) + '/' + relPath;
+                const plainURL = packages(targetPkg) + '/' + relPath;
                 return plainURL + resolveQueryString(plainURL, queryStringOptions);
 
             } else if (typeof packages === 'object') {
@@ -206,7 +206,7 @@ class RF_URDFLoader {
                 // "pkg" is a map of packages
                 if (targetPkg in packages) {
 
-                    let plainURL = packages[targetPkg] + '/' + relPath;
+                    const plainURL = packages[targetPkg] + '/' + relPath;
                     return plainURL + resolveQueryString(plainURL, queryStringOptions);
 
                 } else {
