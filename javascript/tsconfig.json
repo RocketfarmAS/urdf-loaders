@@ -13,7 +13,7 @@
         "strictNullChecks":true
     },
     "files": [
-        "src/RF-URDFLoader.d.ts"
+        "src/URDFLoader.d.ts"
     ],
     "exclude": [
         "node_modules",

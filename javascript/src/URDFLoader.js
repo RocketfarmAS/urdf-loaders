@@ -506,7 +506,6 @@ class RF_URDFLoader {
                         const loader = new THREE.TextureLoader(manager);
                         const filePath = resolvePath(filename);
                         material.map = loader.load(filePath);
-                        material.map.colorSpace = THREE.SRGBColorSpace;
 
                     }
 
@@ -657,6 +656,30 @@ class RF_URDFLoader {
 
     // Default mesh loading function
     defaultMeshLoader(path, manager, done) {
+
+        manager.setURLModifier((url) => {
+            const qParam = new URL(url).searchParams;
+
+            // Check if the URL requires a SAS token
+            if (
+                // Url is registered for SAS token and ...
+                this.queryStringOptions.find(([key]) => url.startsWith(key)) &&
+                // SAS token isn't already present
+                !(
+                    qParam.get('sv') ||
+                    qParam.get('st') ||
+                    qParam.get('se') ||
+                    qParam.get('sr') ||
+                    qParam.get('sp') ||
+                    qParam.get('sig')
+                )
+            ) {
+                // Append the SAS token to the URL
+                return url + resolveQueryString(url, this.queryStringOptions);
+            }
+            // Return the original or modified URL
+            return url;
+        });
 
         if (/\.stl/i.test(path)) {
 
