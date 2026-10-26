@@ -1,3 +1,4 @@
+/** @import { Object3D, LoadingManager, Material } from 'three' */
 import * as THREE from 'three';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import { ColladaLoader } from 'three/examples/jsm/loaders/ColladaLoader.js';
@@ -17,7 +18,7 @@ THREE.js
  ／
 Z
 
-ROS URDf
+ROS URDF
        Z
        |   X
        | ／
@@ -62,11 +63,63 @@ function resolveQueryString(path, queryStringOptions) {
     return '';
 }
 
-/* URDFLoader Class */
-// Loads and reads a URDF file into a THREEjs Object3D format
-export default
-class RF_URDFLoader {
+/**
+ * Function that returns a resolved path given a ROS package name.
+ * @callback PackageResolver
+ * @param {string} pkg The package name
+ * @returns {string} The resolved package directory path
+ */
 
+/**
+ * Called when a mesh has finished loading.
+ * @callback OnMeshLoadComplete
+ * @param {Object3D} obj The loaded mesh object, or null if an error occurred
+ * @param {Error} [err] Error if loading failed
+ */
+
+/**
+ * Function for loading mesh files referenced by the URDF.
+ * @callback MeshLoadFunc
+ * @param {string} pathToModel The url to load the model from
+ * @param {LoadingManager} manager The THREE.js LoadingManager used by the URDFLoader
+ * @param {Material} material The material derived from the URDF `<material>` tag for this visual element, or a default material if none was specified
+ * @param {OnMeshLoadComplete} onComplete Called with the mesh once the geometry has been loaded
+ */
+
+/**
+ * @callback OnURDFLoad
+ * @param {URDFRobot} robot The loaded robot model
+ */
+
+/**
+ * @callback OnURDFProgress
+ */
+
+/**
+ * @callback OnURDFError
+ * @param {Error} error The error that occurred
+ */
+
+/**
+ * List of options available on the URDFLoader class.
+ * @typedef {Object} URDFOptions
+ * @property {string|Object|PackageResolver} [packages=''] The path representing the `package://` directory(s) to load `package://` relative files. If the argument is a string it is used to replace the `package://` prefix. To specify multiple packages use an object mapping package names to paths. If set to a function it takes the package name and returns the package path.
+ * @property {MeshLoadFunc} [loadMeshCb=null] An optional function that can be used to override the default mesh loading functionality. The default loader is specified at `URDFLoader.defaultMeshLoader`. `pathToModel` is the url to load the model from. `manager` is the THREE.js `LoadingManager` used by the `URDFLoader`. `material` is the material derived from the URDF `<material>` tag and should be applied to meshes that have no internally declared material. `onComplete` is called with the mesh once the geometry has been loaded.
+ * @property {Object} [fetchOptions=null] An optional object with the set of options to pass to the `fetch` function call used to load the URDF file.
+ * @property {string} [workingPath=''] The path to load geometry relative to. Defaults to the path relative to the loaded URDF file.
+ * @property {boolean} [parseVisual=true] An optional value that can be used to enable / disable loading meshes for links from the `visual` nodes. Defaults to true.
+ * @property {boolean} [parseCollision=false] An optional value that can be used to enable / disable loading meshes for links from the `collision` nodes. Defaults to false.
+ */
+
+/**
+ * Loads and builds the specified URDF robot in THREE.js.
+ */
+class URDFLoader {
+
+    /**
+     * Constructor. Manager is used for transforming load URLs and tracking downloads.
+     * @param {LoadingManager} [manager] The THREE.js LoadingManager.
+     */
     constructor(manager) {
 
         this.manager = manager || THREE.DefaultLoadingManager;
@@ -80,6 +133,11 @@ class RF_URDFLoader {
     }
 
     /* Public API */
+    /**
+     * Promise-wrapped version of `load`.
+     * @param {string} urdfpath The path to the URDF within the package OR absolute
+     * @returns {Promise<URDFRobot>}
+     */
     loadAsync(urdf) {
 
         return new Promise((resolve, reject) => {
@@ -90,8 +148,15 @@ class RF_URDFLoader {
 
     }
 
-    // urdf:    The path to the URDF within the package OR absolute
-    // onComplete:      Callback that is passed the model once loaded
+    /**
+     * Loads and builds the specified URDF robot in THREE.js. Takes a path to load the urdf file
+     * from, a func to call when the robot has loaded, and a set of options.
+     * @param {string} urdfpath The path to the URDF within the package OR absolute
+     * @param {OnURDFLoad} onComplete Callback that is passed the model once loaded
+     * @param {OnURDFProgress} [onProgress] Called during loading
+     * @param {OnURDFError} [onError] Called if an error occurs
+     * @returns {void}
+     */
     load(urdf, onComplete, onProgress, onError) {
 
         // Check if a full URI is specified before
@@ -124,13 +189,7 @@ class RF_URDFLoader {
             })
             .then(data => {
 
-                if (this.workingPath === '') {
-
-                    this.workingPath = workingPath;
-
-                }
-
-                const model = this.parse(data);
+                const model = this.parse(data, this.workingPath || workingPath);
                 onComplete(model);
                 manager.itemEnd(urdfPath);
 
@@ -153,13 +212,22 @@ class RF_URDFLoader {
 
     }
 
-    parse(content) {
+    /**
+     * Parses URDF content and returns the robot model. Takes an XML string to parse and a set of
+     * options. If the XML document has already been parsed using `DOMParser` then either the
+     * returned `Document` or root `Element` can be passed into this function in place of the
+     * string, as well.
+     *
+     * Note that geometry will not necessarily be loaded when the robot is returned.
+     * @param {string|Document|Element} urdfContent The URDF content to parse
+     * @returns {URDFRobot}
+     */
+    parse(content, workingPath = this.workingPath) {
 
         const packages = this.packages;
         const loadMeshCb = this.loadMeshCb;
         const parseVisual = this.parseVisual;
         const parseCollision = this.parseCollision;
-        const workingPath = this.workingPath;
         const manager = this.manager;
         const linkMap = {};
         const jointMap = {};
@@ -196,7 +264,7 @@ class RF_URDFLoader {
 
                 }
 
-            } else if (packages instanceof Function) {
+            } else if (typeof packages === 'function') {
 
                 const plainURL = packages(targetPkg) + '/' + relPath;
                 return plainURL + resolveQueryString(plainURL, queryStringOptions);
@@ -389,6 +457,8 @@ class RF_URDFLoader {
 
                     obj.limit.lower = parseFloat(n.getAttribute('lower') || obj.limit.lower);
                     obj.limit.upper = parseFloat(n.getAttribute('upper') || obj.limit.upper);
+                    obj.limit.effort = parseFloat(n.getAttribute('effort') || obj.limit.effort);
+                    obj.limit.velocity = parseFloat(n.getAttribute('velocity') || obj.limit.velocity);
 
                 }
             });
@@ -427,6 +497,37 @@ class RF_URDFLoader {
             target.name = link.getAttribute('name');
             target.urdfName = target.name;
             target.urdfNode = link;
+
+            // Parse inertial properties
+            const inertialNode = children.find(n => n.nodeName.toLowerCase() === 'inertial');
+            if (inertialNode) {
+
+                [ ...inertialNode.children ].forEach(n => {
+
+                    const type = n.nodeName.toLowerCase();
+                    if (type === 'origin') {
+
+                        target.inertial.origin.xyz = processTuple(n.getAttribute('xyz'));
+                        target.inertial.origin.rpy = processTuple(n.getAttribute('rpy'));
+
+                    } else if (type === 'mass') {
+
+                        target.inertial.mass = parseFloat(n.getAttribute('value')) || 0;
+
+                    } else if (type === 'inertia') {
+
+                        target.inertial.inertia.ixx = parseFloat(n.getAttribute('ixx')) || 0;
+                        target.inertial.inertia.ixy = parseFloat(n.getAttribute('ixy')) || 0;
+                        target.inertial.inertia.ixz = parseFloat(n.getAttribute('ixz')) || 0;
+                        target.inertial.inertia.iyy = parseFloat(n.getAttribute('iyy')) || 0;
+                        target.inertial.inertia.iyz = parseFloat(n.getAttribute('iyz')) || 0;
+                        target.inertial.inertia.izz = parseFloat(n.getAttribute('izz')) || 0;
+
+                    }
+
+                });
+
+            }
 
             if (parseVisual) {
 
@@ -569,19 +670,13 @@ class RF_URDFLoader {
 
                             }
 
-                            loadMeshCb(filePath, manager, (obj, err) => {
+                            loadMeshCb(filePath, manager, material, (obj, err) => {
 
                                 if (err) {
 
                                     console.error('URDFLoader: Error loading mesh.', err);
 
                                 } else if (obj) {
-
-                                    if (obj instanceof THREE.Mesh) {
-
-                                        obj.material = material;
-
-                                    }
 
                                     // We don't expect non identity rotations or positions. In the case of
                                     // COLLADA files the model might come in with a custom scale for unit
@@ -655,7 +750,7 @@ class RF_URDFLoader {
     }
 
     // Default mesh loading function
-    defaultMeshLoader(path, manager, done) {
+    defaultMeshLoader(path, manager, material, done) {
 
         manager.setURLModifier((url) => {
             const qParam = new URL(url).searchParams;
@@ -685,14 +780,14 @@ class RF_URDFLoader {
 
             const loader = new STLLoader(manager);
             loader.load(path, geom => {
-                const mesh = new THREE.Mesh(geom, new THREE.MeshPhongMaterial());
+                const mesh = new THREE.Mesh(geom, material || new THREE.MeshPhongMaterial());
                 done(mesh);
-            });
+            }, null, err => done(null, err));
 
         } else if (/\.dae/i.test(path)) {
 
             const loader = new ColladaLoader(manager);
-            loader.load(path, dae => done(dae.scene));
+            loader.load(path, dae => done(dae.scene), null, err => done(null, err));
 
         } else {
 
@@ -702,4 +797,6 @@ class RF_URDFLoader {
 
     }
 
-};
+}
+
+export default URDFLoader;

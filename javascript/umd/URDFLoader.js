@@ -2,10 +2,9 @@
     typeof exports === 'object' && typeof module !== 'undefined' ? module.exports = factory(require('three'), require('three/examples/jsm/loaders/STLLoader.js'), require('three/examples/jsm/loaders/ColladaLoader.js')) :
     typeof define === 'function' && define.amd ? define(['three', 'three/examples/jsm/loaders/STLLoader.js', 'three/examples/jsm/loaders/ColladaLoader.js'], factory) :
     (global = typeof globalThis !== 'undefined' ? globalThis : global || self, global.URDFLoader = factory(global.THREE, global.THREE, global.THREE));
-}(this, (function (THREE, STLLoader_js, ColladaLoader_js) { 'use strict';
+})(this, (function (THREE, STLLoader_js, ColladaLoader_js) { 'use strict';
 
-    function _interopNamespace(e) {
-        if (e && e.__esModule) return e;
+    function _interopNamespaceDefault(e) {
         var n = Object.create(null);
         if (e) {
             Object.keys(e).forEach(function (k) {
@@ -13,18 +12,24 @@
                     var d = Object.getOwnPropertyDescriptor(e, k);
                     Object.defineProperty(n, k, d.get ? d : {
                         enumerable: true,
-                        get: function () {
-                            return e[k];
-                        }
+                        get: function () { return e[k]; }
                     });
                 }
             });
         }
-        n['default'] = e;
+        n.default = e;
         return Object.freeze(n);
     }
 
-    var THREE__namespace = /*#__PURE__*/_interopNamespace(THREE);
+    var THREE__namespace = /*#__PURE__*/_interopNamespaceDefault(THREE);
+
+    const _tempAxis = new THREE.Vector3();
+    const _tempEuler = new THREE.Euler();
+    const _tempTransform = new THREE.Matrix4();
+    const _tempOrigTransform = new THREE.Matrix4();
+    const _tempQuat = new THREE.Quaternion();
+    const _tempScale = new THREE.Vector3(1.0, 1.0, 1.0);
+    const _tempPosition = new THREE.Vector3();
 
     class URDFBase extends THREE.Object3D {
 
@@ -73,6 +78,10 @@
 
     }
 
+    /**
+     * An object representing a robot link.
+     * @extends Object3D
+     */
     class URDFLink extends URDFBase {
 
         constructor(...args) {
@@ -81,12 +90,62 @@
             this.isURDFLink = true;
             this.type = 'URDFLink';
 
+            /**
+             * The name of the link.
+             * @type {string}
+             */
+            this.name = '';
+
+            /**
+             * The inertial properties of the link parsed from the `<inertial>` element. All fields default to zero if not specified in the URDF.
+             * @type {Object}
+             * @property {number} [mass=0]
+             * @property {number[]} [origin.xyz]
+             * @property {number[]} [origin.rpy]
+             * @property {number} [inertia.ixx=0]
+             * @property {number} [inertia.ixy=0]
+             * @property {number} [inertia.ixz=0]
+             * @property {number} [inertia.iyy=0]
+             * @property {number} [inertia.iyz=0]
+             * @property {number} [inertia.izz=0]
+             */
+            this.inertial = {
+                mass: 0,
+                origin: { xyz: [0, 0, 0], rpy: [0, 0, 0] },
+                inertia: { ixx: 0, ixy: 0, ixz: 0, iyy: 0, iyz: 0, izz: 0 },
+            };
+
+        }
+
+        copy(source, recursive) {
+
+            super.copy(source, recursive);
+
+            this.inertial = {
+                mass: source.inertial.mass,
+                origin: {
+                    xyz: [...source.inertial.origin.xyz],
+                    rpy: [...source.inertial.origin.rpy],
+                },
+                inertia: { ...source.inertial.inertia },
+            };
+
+            return this;
+
         }
 
     }
 
+    /**
+     * An object representing a robot joint.
+     * @extends Object3D
+     */
     class URDFJoint extends URDFBase {
 
+        /**
+         * The type of joint. Can only be the URDF types of joints.
+         * @type {string}
+         */
         get jointType() {
 
             return this._jointType;
@@ -111,7 +170,9 @@
                     break;
 
                 case 'planar':
-                    this.jointValue = new Array(2).fill(0);
+                    // Planar joints are, 3dof: position XY and rotation Z.
+                    this.jointValue = new Array(3).fill(0);
+                    this.axis = new THREE.Vector3(0, 0, 1);
                     break;
 
                 case 'floating':
@@ -122,6 +183,11 @@
 
         }
 
+        /**
+         * The current position or angle for joint.
+         * @type {number}
+         * @readonly
+         */
         get angle() {
 
             return this.jointValue[0];
@@ -135,15 +201,44 @@
             this.isURDFJoint = true;
             this.type = 'URDFJoint';
 
+            /**
+             * The name of the joint.
+             * @type {string}
+             */
+            this.name = '';
+
             this.jointValue = null;
             this.jointType = 'fixed';
+
+            /**
+             * The axis described for the joint.
+             * @type {Vector3}
+             */
             this.axis = new THREE.Vector3(1, 0, 0);
-            this.limit = { lower: 0, upper: 0 };
+
+            /**
+             * An object containing the `lower` and `upper` position constraints, as well as the `effort` and `velocity` limits for the joint. All fields default to zero if not specified in the URDF.
+             * @type {Object}
+             * @property {number} [lower=0]
+             * @property {number} [upper=0]
+             * @property {number} [effort=0]
+             * @property {number} [velocity=0]
+             */
+            this.limit = { lower: 0, upper: 0, effort: 0, velocity: 0 };
+
+            /**
+             * Whether or not to ignore the joint limits when setting a the joint position.
+             * @type {boolean}
+             */
             this.ignoreLimits = false;
 
             this.origPosition = null;
             this.origQuaternion = null;
 
+            /**
+             * A list of joints which mimic this joint. These joints are updated whenever this joint is.
+             * @type {URDFMimicJoint[]}
+             */
             this.mimicJoints = [];
 
         }
@@ -157,6 +252,8 @@
             this.axis = source.axis.clone();
             this.limit.lower = source.limit.lower;
             this.limit.upper = source.limit.upper;
+            this.limit.effort = source.limit.effort;
+            this.limit.velocity = source.limit.velocity;
             this.ignoreLimits = false;
 
             this.jointValue = [...source.jointValue];
@@ -171,9 +268,20 @@
         }
 
         /* Public Functions */
+        /**
+         * Sets the joint value(s) for the given joint. The interpretation of the value depends on the
+         * joint type. If the joint value specifies an angle it must be in radians. If the value
+         * specifies a distance, it must be in meters. Passing null for any component of the value will
+         * skip updating that particular component.
+         *
+         * Returns true if the joint or any of its mimicking joints changed.
+         * @param {...number|null} values The joint value components to set, optionally null for no-op
+         * @returns {boolean} Returns true if the joint or any of its mimicking joints changed.
+         */
         setJointValue(...values) {
 
-            values = values.map(v => parseFloat(v));
+            // Parse all incoming values into numbers except null, which we treat as a no-op for that value component.
+            values = values.map(v => v === null ? null : parseFloat(v));
 
             if (!this.origPosition || !this.origQuaternion) {
 
@@ -243,7 +351,8 @@
                     }
 
                     this.position.copy(this.origPosition);
-                    this.position.addScaledVector(this.axis, pos);
+                    _tempAxis.copy(this.axis).applyEuler(this.rotation);
+                    this.position.addScaledVector(_tempAxis, pos);
 
                     if (this.jointValue[0] !== pos) {
 
@@ -259,10 +368,63 @@
 
                 }
 
-                case 'floating':
-                case 'planar':
-                    // TODO: Support these joint types
-                    console.warn(`'${ this.jointType }' joint not yet supported`);
+                case 'floating': {
+
+                    // no-op if all values are identical to existing value or are null
+                    if (this.jointValue.every((value, index) => values[index] === value || values[index] === null)) return didUpdate;
+                    // Floating joints have six degrees of freedom: X, Y, Z, R, P, Y.
+                    this.jointValue[0] = values[0] !== null ? values[0] : this.jointValue[0];
+                    this.jointValue[1] = values[1] !== null ? values[1] : this.jointValue[1];
+                    this.jointValue[2] = values[2] !== null ? values[2] : this.jointValue[2];
+                    this.jointValue[3] = values[3] !== null ? values[3] : this.jointValue[3];
+                    this.jointValue[4] = values[4] !== null ? values[4] : this.jointValue[4];
+                    this.jointValue[5] = values[5] !== null ? values[5] : this.jointValue[5];
+
+                    // Compose transform of joint origin and transform due to joint values
+                    _tempOrigTransform.compose(this.origPosition, this.origQuaternion, _tempScale);
+                    _tempQuat.setFromEuler(
+                        _tempEuler.set(
+                            this.jointValue[3],
+                            this.jointValue[4],
+                            this.jointValue[5],
+                            'XYZ',
+                        ),
+                    );
+                    _tempPosition.set(this.jointValue[0], this.jointValue[1], this.jointValue[2]);
+                    _tempTransform.compose(_tempPosition, _tempQuat, _tempScale);
+
+                    // Calcualte new transform
+                    _tempOrigTransform.premultiply(_tempTransform);
+                    this.position.setFromMatrixPosition(_tempOrigTransform);
+                    this.rotation.setFromRotationMatrix(_tempOrigTransform);
+
+                    this.matrixWorldNeedsUpdate = true;
+                    return true;
+                }
+
+                case 'planar': {
+
+                    // no-op if all values are identical to existing value or are null
+                    if (this.jointValue.every((value, index) => values[index] === value || values[index] === null)) return didUpdate;
+
+                    this.jointValue[0] = values[0] !== null ? values[0] : this.jointValue[0];
+                    this.jointValue[1] = values[1] !== null ? values[1] : this.jointValue[1];
+                    this.jointValue[2] = values[2] !== null ? values[2] : this.jointValue[2];
+
+                    // Compose transform of joint origin and transform due to joint values
+                    _tempOrigTransform.compose(this.origPosition, this.origQuaternion, _tempScale);
+                    _tempQuat.setFromAxisAngle(this.axis, this.jointValue[2]);
+                    _tempPosition.set(this.jointValue[0], this.jointValue[1], 0.0);
+                    _tempTransform.compose(_tempPosition, _tempQuat, _tempScale);
+
+                    // Calculate new transform
+                    _tempOrigTransform.premultiply(_tempTransform);
+                    this.position.setFromMatrixPosition(_tempOrigTransform);
+                    this.rotation.setFromRotationMatrix(_tempOrigTransform);
+
+                    this.matrixWorldNeedsUpdate = true;
+                    return true;
+                }
 
             }
 
@@ -272,21 +434,56 @@
 
     }
 
+    /**
+     * An object representing a robot joint which mimics another existing joint. The value of this
+     * joint can be computed as `value = multiplier * other_joint_value + offset`.
+     * @extends URDFJoint
+     */
     class URDFMimicJoint extends URDFJoint {
 
         constructor(...args) {
 
             super(...args);
             this.type = 'URDFMimicJoint';
+
+            /**
+             * The name of the joint which this joint mimics.
+             * @type {string}
+             */
             this.mimicJoint = null;
+
+            /**
+             * Specifies the offset to add in the formula above. Defaults to 0 (radians for revolute joints, meters for prismatic joints).
+             * @type {number}
+             * @default 0
+             */
             this.offset = 0;
+
+            /**
+             * Specifies the multiplicative factor in the formula above. Defaults to 1.0.
+             * @type {number}
+             * @default 1
+             */
             this.multiplier = 1;
 
         }
 
         updateFromMimickedJoint(...values) {
 
-            const modifiedValues = values.map(x => x * this.multiplier + this.offset);
+            const modifiedValues = values.map(x => {
+
+                if (x === null) {
+
+                    return null;
+
+                } else {
+
+                    return x * this.multiplier + this.offset;
+
+                }
+
+            });
+
             return super.setJointValue(...modifiedValues);
 
         }
@@ -306,6 +503,10 @@
 
     }
 
+    /**
+     * Object that describes the URDF Robot.
+     * @extends URDFLink
+     */
     class URDFRobot extends URDFLink {
 
         constructor(...args) {
@@ -315,12 +516,41 @@
             this.urdfNode = null;
 
             this.urdfRobotNode = null;
+
+            /**
+             * The name of the robot described in the `<robot>` tag.
+             * @type {string}
+             */
             this.robotName = null;
 
+            /**
+             * A dictionary of `linkName : URDFLink` with all links in the robot.
+             * @type {Object.<string, URDFLink>}
+             */
             this.links = null;
+
+            /**
+             * A dictionary of `jointName : URDFJoint` with all joints in the robot.
+             * @type {Object.<string, URDFJoint>}
+             */
             this.joints = null;
+
+            /**
+             * A dictionary of `colliderName : Object3D` with all collision nodes in the robot.
+             * @type {Object.<string, Object3D>}
+             */
             this.colliders = null;
+
+            /**
+             * A dictionary of `visualName : Object3D` with all visual nodes in the robot.
+             * @type {Object.<string, Object3D>}
+             */
             this.visual = null;
+
+            /**
+             * A dictionary of all the named frames in the robot including links, joints, colliders, and visual.
+             * @type {Object.<string, Object3D>}
+             */
             this.frames = null;
 
         }
@@ -365,6 +595,11 @@
 
             });
 
+            // Repair mimic joint references once we've re-accumulated all our joint data
+            for (const joint in this.joints) {
+                this.joints[joint].mimicJoints = this.joints[joint].mimicJoints.map((mimicJoint) => this.joints[mimicJoint.name]);
+            }
+
             this.frames = {
                 ...this.colliders,
                 ...this.visual,
@@ -382,6 +617,12 @@
 
         }
 
+        /**
+         * Sets the joint value of the joint with the given name. Returns true if the joint changed.
+         * @param {string} name The name of the joint to set
+         * @param {...number} angle The value(s) to set
+         * @returns {boolean} Returns true if the joint changed.
+         */
         setJointValue(jointName, ...angle) {
 
             const joint = this.joints[jointName];
@@ -394,6 +635,11 @@
             return false;
         }
 
+        /**
+         * Sets the joint values for all the joints in the dictionary indexed by joint name. Returns true if a joint changed.
+         * @param {Object} jointValueDictionary A dictionary of joint names to values
+         * @returns {boolean} Returns true if a joint changed.
+         */
         setJointValues(values) {
 
             let didChange = false;
@@ -418,6 +664,8 @@
 
     }
 
+    /** @import { Object3D, LoadingManager, Material } from 'three' */
+
     /*
     Reference coordinate frames for THREE.js and ROS.
     Both coordinate systems are right handed so the URDF is instantiated without
@@ -432,7 +680,7 @@
      ／
     Z
 
-    ROS URDf
+    ROS URDF
            Z
            |   X
            | ／
@@ -466,10 +714,63 @@
 
     }
 
-    /* URDFLoader Class */
-    // Loads and reads a URDF file into a THREEjs Object3D format
+    /**
+     * Function that returns a resolved path given a ROS package name.
+     * @callback PackageResolver
+     * @param {string} pkg The package name
+     * @returns {string} The resolved package directory path
+     */
+
+    /**
+     * Called when a mesh has finished loading.
+     * @callback OnMeshLoadComplete
+     * @param {Object3D} obj The loaded mesh object, or null if an error occurred
+     * @param {Error} [err] Error if loading failed
+     */
+
+    /**
+     * Function for loading mesh files referenced by the URDF.
+     * @callback MeshLoadFunc
+     * @param {string} pathToModel The url to load the model from
+     * @param {LoadingManager} manager The THREE.js LoadingManager used by the URDFLoader
+     * @param {Material} material The material derived from the URDF `<material>` tag for this visual element, or a default material if none was specified
+     * @param {OnMeshLoadComplete} onComplete Called with the mesh once the geometry has been loaded
+     */
+
+    /**
+     * @callback OnURDFLoad
+     * @param {URDFRobot} robot The loaded robot model
+     */
+
+    /**
+     * @callback OnURDFProgress
+     */
+
+    /**
+     * @callback OnURDFError
+     * @param {Error} error The error that occurred
+     */
+
+    /**
+     * List of options available on the URDFLoader class.
+     * @typedef {Object} URDFOptions
+     * @property {string|Object|PackageResolver} [packages=''] The path representing the `package://` directory(s) to load `package://` relative files. If the argument is a string it is used to replace the `package://` prefix. To specify multiple packages use an object mapping package names to paths. If set to a function it takes the package name and returns the package path.
+     * @property {MeshLoadFunc} [loadMeshCb=null] An optional function that can be used to override the default mesh loading functionality. The default loader is specified at `URDFLoader.defaultMeshLoader`. `pathToModel` is the url to load the model from. `manager` is the THREE.js `LoadingManager` used by the `URDFLoader`. `material` is the material derived from the URDF `<material>` tag and should be applied to meshes that have no internally declared material. `onComplete` is called with the mesh once the geometry has been loaded.
+     * @property {Object} [fetchOptions=null] An optional object with the set of options to pass to the `fetch` function call used to load the URDF file.
+     * @property {string} [workingPath=''] The path to load geometry relative to. Defaults to the path relative to the loaded URDF file.
+     * @property {boolean} [parseVisual=true] An optional value that can be used to enable / disable loading meshes for links from the `visual` nodes. Defaults to true.
+     * @property {boolean} [parseCollision=false] An optional value that can be used to enable / disable loading meshes for links from the `collision` nodes. Defaults to false.
+     */
+
+    /**
+     * Loads and builds the specified URDF robot in THREE.js.
+     */
     class URDFLoader {
 
+        /**
+         * Constructor. Manager is used for transforming load URLs and tracking downloads.
+         * @param {LoadingManager} [manager] The THREE.js LoadingManager.
+         */
         constructor(manager) {
 
             this.manager = manager || THREE__namespace.DefaultLoadingManager;
@@ -483,6 +784,11 @@
         }
 
         /* Public API */
+        /**
+         * Promise-wrapped version of `load`.
+         * @param {string} urdfpath The path to the URDF within the package OR absolute
+         * @returns {Promise<URDFRobot>}
+         */
         loadAsync(urdf) {
 
             return new Promise((resolve, reject) => {
@@ -493,8 +799,15 @@
 
         }
 
-        // urdf:    The path to the URDF within the package OR absolute
-        // onComplete:      Callback that is passed the model once loaded
+        /**
+         * Loads and builds the specified URDF robot in THREE.js. Takes a path to load the urdf file
+         * from, a func to call when the robot has loaded, and a set of options.
+         * @param {string} urdfpath The path to the URDF within the package OR absolute
+         * @param {OnURDFLoad} onComplete Callback that is passed the model once loaded
+         * @param {OnURDFProgress} [onProgress] Called during loading
+         * @param {OnURDFError} [onError] Called if an error occurs
+         * @returns {void}
+         */
         load(urdf, onComplete, onProgress, onError) {
 
             // Check if a full URI is specified before
@@ -526,13 +839,7 @@
                 })
                 .then(data => {
 
-                    if (this.workingPath === '') {
-
-                        this.workingPath = workingPath;
-
-                    }
-
-                    const model = this.parse(data);
+                    const model = this.parse(data, this.workingPath || workingPath);
                     onComplete(model);
                     manager.itemEnd(urdfPath);
 
@@ -555,13 +862,22 @@
 
         }
 
-        parse(content) {
+        /**
+         * Parses URDF content and returns the robot model. Takes an XML string to parse and a set of
+         * options. If the XML document has already been parsed using `DOMParser` then either the
+         * returned `Document` or root `Element` can be passed into this function in place of the
+         * string, as well.
+         *
+         * Note that geometry will not necessarily be loaded when the robot is returned.
+         * @param {string|Document|Element} urdfContent The URDF content to parse
+         * @returns {URDFRobot}
+         */
+        parse(content, workingPath = this.workingPath) {
 
             const packages = this.packages;
             const loadMeshCb = this.loadMeshCb;
             const parseVisual = this.parseVisual;
             const parseCollision = this.parseCollision;
-            const workingPath = this.workingPath;
             const manager = this.manager;
             const linkMap = {};
             const jointMap = {};
@@ -594,7 +910,7 @@
 
                     }
 
-                } else if (packages instanceof Function) {
+                } else if (typeof packages === 'function') {
 
                     return packages(targetPkg) + '/' + relPath;
 
@@ -785,6 +1101,8 @@
 
                         obj.limit.lower = parseFloat(n.getAttribute('lower') || obj.limit.lower);
                         obj.limit.upper = parseFloat(n.getAttribute('upper') || obj.limit.upper);
+                        obj.limit.effort = parseFloat(n.getAttribute('effort') || obj.limit.effort);
+                        obj.limit.velocity = parseFloat(n.getAttribute('velocity') || obj.limit.velocity);
 
                     }
                 });
@@ -823,6 +1141,37 @@
                 target.name = link.getAttribute('name');
                 target.urdfName = target.name;
                 target.urdfNode = link;
+
+                // Parse inertial properties
+                const inertialNode = children.find(n => n.nodeName.toLowerCase() === 'inertial');
+                if (inertialNode) {
+
+                    [ ...inertialNode.children ].forEach(n => {
+
+                        const type = n.nodeName.toLowerCase();
+                        if (type === 'origin') {
+
+                            target.inertial.origin.xyz = processTuple(n.getAttribute('xyz'));
+                            target.inertial.origin.rpy = processTuple(n.getAttribute('rpy'));
+
+                        } else if (type === 'mass') {
+
+                            target.inertial.mass = parseFloat(n.getAttribute('value')) || 0;
+
+                        } else if (type === 'inertia') {
+
+                            target.inertial.inertia.ixx = parseFloat(n.getAttribute('ixx')) || 0;
+                            target.inertial.inertia.ixy = parseFloat(n.getAttribute('ixy')) || 0;
+                            target.inertial.inertia.ixz = parseFloat(n.getAttribute('ixz')) || 0;
+                            target.inertial.inertia.iyy = parseFloat(n.getAttribute('iyy')) || 0;
+                            target.inertial.inertia.iyz = parseFloat(n.getAttribute('iyz')) || 0;
+                            target.inertial.inertia.izz = parseFloat(n.getAttribute('izz')) || 0;
+
+                        }
+
+                    });
+
+                }
 
                 if (parseVisual) {
 
@@ -887,7 +1236,7 @@
                                 .split(/\s/g)
                                 .map(v => parseFloat(v));
 
-                        material.color.setRGB(rgba[0], rgba[1], rgba[2]).convertSRGBToLinear();
+                        material.color.setRGB(rgba[0], rgba[1], rgba[2]);
                         material.opacity = rgba[3];
                         material.transparent = rgba[3] < 1;
                         material.depthWrite = !material.transparent;
@@ -902,7 +1251,7 @@
                             const loader = new THREE__namespace.TextureLoader(manager);
                             const filePath = resolvePath(filename);
                             material.map = loader.load(filePath);
-                            material.map.encoding = THREE__namespace.sRGBEncoding;
+                            material.map.colorSpace = THREE__namespace.SRGBColorSpace;
 
                         }
 
@@ -966,19 +1315,13 @@
 
                                 }
 
-                                loadMeshCb(filePath, manager, (obj, err) => {
+                                loadMeshCb(filePath, manager, material, (obj, err) => {
 
                                     if (err) {
 
                                         console.error('URDFLoader: Error loading mesh.', err);
 
                                     } else if (obj) {
-
-                                        if (obj instanceof THREE__namespace.Mesh) {
-
-                                            obj.material = material;
-
-                                        }
 
                                         // We don't expect non identity rotations or positions. In the case of
                                         // COLLADA files the model might come in with a custom scale for unit
@@ -1052,20 +1395,20 @@
         }
 
         // Default mesh loading function
-        defaultMeshLoader(path, manager, done) {
+        defaultMeshLoader(path, manager, material, done) {
 
             if (/\.stl$/i.test(path)) {
 
                 const loader = new STLLoader_js.STLLoader(manager);
                 loader.load(path, geom => {
-                    const mesh = new THREE__namespace.Mesh(geom, new THREE__namespace.MeshPhongMaterial());
+                    const mesh = new THREE__namespace.Mesh(geom, material || new THREE__namespace.MeshPhongMaterial());
                     done(mesh);
-                });
+                }, null, err => done(null, err));
 
             } else if (/\.dae$/i.test(path)) {
 
                 const loader = new ColladaLoader_js.ColladaLoader(manager);
-                loader.load(path, dae => done(dae.scene));
+                loader.load(path, dae => done(dae.scene), null, err => done(null, err));
 
             } else {
 
@@ -1075,9 +1418,9 @@
 
         }
 
-    };
+    }
 
     return URDFLoader;
 
-})));
+}));
 //# sourceMappingURL=URDFLoader.js.map

@@ -4,6 +4,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [0.13.1] - 2026.07.08
+### Fixed
+- Typescript types
+
+## [0.13.0] - 2026.06.15
+### Added
+- JSDoc annotations on all public API surface (URDFLoader, URDFClasses, URDFViewer).
+- `docs:build` script and generated `API.md` reference documentation.
+
+### Changed
+- URDFLoader: Add "material" argument to "loadMeshCb" as the third parameter (breaking change).
+- README: Replaced inline API documentation with a link to `API.md`.
+
+## [0.12.7] - 2026.04.10
+### Added
+- Support for "inertial" data.
+
+### Fixed
+- Make "function" check more robust for "packages" field
+- Add missing error callback for default geometry loaders
+
+## [0.12.6] - 2025.06.12
+### Fixed
+- Updated type definitions.
+
+## [0.12.5] - 2025.05.06
+### Fixed
+- URDFControls: Adjust mouse controls to support non-fullscreen elements.
+
+## [0.12.4] - 2025.01.01
+### Fixed
+- The loader will use the correct working path if used multiple times.
+
 ## [0.12.3] - 2024.09.02
 ### Added
 - d.ts definition for `loadAsync`.
@@ -59,7 +92,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Added `"type": "module"` to the package.json and made the main entry file point to the es6 module.
 - Export URDF Class types as `interafaces` rather than `classes`.
 - Changed URDF Class type definitions to be exported as `interface` rather than `class`.
- 
+
 ## [0.9.5] - 2021-01-26
 ### Added
 - Support for "mimic" joints.

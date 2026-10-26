@@ -2,12 +2,9 @@
     typeof exports === 'object' && typeof module !== 'undefined' ? module.exports = factory(require('three'), require('three/examples/jsm/controls/OrbitControls.js'), require('./URDFLoader.js')) :
     typeof define === 'function' && define.amd ? define(['three', 'three/examples/jsm/controls/OrbitControls.js', './URDFLoader'], factory) :
     (global = typeof globalThis !== 'undefined' ? globalThis : global || self, global.URDFViewer = factory(global.THREE, global.THREE, global.URDFLoader));
-}(this, (function (THREE, OrbitControls_js, URDFLoader) { 'use strict';
+})(this, (function (THREE, OrbitControls_js, URDFLoader) { 'use strict';
 
-    function _interopDefaultLegacy (e) { return e && typeof e === 'object' && 'default' in e ? e : { 'default': e }; }
-
-    function _interopNamespace(e) {
-        if (e && e.__esModule) return e;
+    function _interopNamespaceDefault(e) {
         var n = Object.create(null);
         if (e) {
             Object.keys(e).forEach(function (k) {
@@ -15,19 +12,16 @@
                     var d = Object.getOwnPropertyDescriptor(e, k);
                     Object.defineProperty(n, k, d.get ? d : {
                         enumerable: true,
-                        get: function () {
-                            return e[k];
-                        }
+                        get: function () { return e[k]; }
                     });
                 }
             });
         }
-        n['default'] = e;
+        n.default = e;
         return Object.freeze(n);
     }
 
-    var THREE__namespace = /*#__PURE__*/_interopNamespace(THREE);
-    var URDFLoader__default = /*#__PURE__*/_interopDefaultLegacy(URDFLoader);
+    var THREE__namespace = /*#__PURE__*/_interopNamespaceDefault(THREE);
 
     const tempVec2 = new THREE__namespace.Vector2();
     const emptyRaycast = () => {};
@@ -35,13 +29,35 @@
     // urdf-viewer element
     // Loads and displays a 3D view of a URDF-formatted robot
 
-    // Events
-    // urdf-change: Fires when the URDF has finished loading and getting processed
-    // urdf-processed: Fires when the URDF has finished loading and getting processed
-    // geometry-loaded: Fires when all the geometry has been fully loaded
-    // ignore-limits-change: Fires when the 'ignore-limits' attribute changes
-    // angle-change: Fires when an angle changes
+    /**
+     * A custom HTML element that loads and displays a URDF robot model in a THREE.js scene.
+     *
+     * @fires URDFViewer#urdf-change
+     * @fires URDFViewer#ignore-limits-change
+     * @fires URDFViewer#urdf-processed
+     * @fires URDFViewer#geometry-loaded
+     */
     class URDFViewer extends HTMLElement {
+
+        /**
+         * Fires when the URDF has changed and a new one is starting to load.
+         * @event URDFViewer#urdf-change
+         */
+
+        /**
+         * Fires when the `ignore-limits` attribute changes.
+         * @event URDFViewer#ignore-limits-change
+         */
+
+        /**
+         * Fires when the URDF has finished loading and getting processed.
+         * @event URDFViewer#urdf-processed
+         */
+
+        /**
+         * Fires when all the geometry has been fully loaded.
+         * @event URDFViewer#geometry-loaded
+         */
 
         static get observedAttributes() {
 
@@ -49,33 +65,69 @@
 
         }
 
+        /**
+         * Corresponds to the `package` parameter in `URDFLoader.load`.
+         * @type {string}
+         */
         get package() { return this.getAttribute('package') || ''; }
         set package(val) { this.setAttribute('package', val); }
 
+        /**
+         * Corresponds to the `urdfpath` parameter in `URDFLoader.load`.
+         * @type {string}
+         */
         get urdf() { return this.getAttribute('urdf') || ''; }
         set urdf(val) { this.setAttribute('urdf', val); }
 
+        /**
+         * Whether or not the display should ignore the joint limits specified in the model when updating angles.
+         * @type {boolean}
+         */
         get ignoreLimits() { return this.hasAttribute('ignore-limits') || false; }
         set ignoreLimits(val) { val ? this.setAttribute('ignore-limits', val) : this.removeAttribute('ignore-limits'); }
 
+        /**
+         * The axis to associate with "up" in THREE.js. Values can be [+-][XYZ].
+         * @type {string}
+         */
         get up() { return this.getAttribute('up') || '+Z'; }
         set up(val) { this.setAttribute('up', val); }
 
+        /**
+         * Whether or not to render the shadow under the robot.
+         * @type {boolean}
+         */
         get displayShadow() { return this.hasAttribute('display-shadow') || false; }
         set displayShadow(val) { val ? this.setAttribute('display-shadow', '') : this.removeAttribute('display-shadow'); }
 
-        get ambientColor() { return this.getAttribute('ambient-color') || '#455A64'; }
+        /**
+         * The color of the ambient light specified with css colors.
+         * @type {string}
+         */
+        get ambientColor() { return this.getAttribute('ambient-color') || '#8ea0a8'; }
         set ambientColor(val) { val ? this.setAttribute('ambient-color', val) : this.removeAttribute('ambient-color'); }
 
+        /**
+         * Automatically redraw the model every frame instead of waiting to be dirtied.
+         * @type {boolean}
+         */
         get autoRedraw() { return this.hasAttribute('auto-redraw') || false; }
         set autoRedraw(val) { val ? this.setAttribute('auto-redraw', true) : this.removeAttribute('auto-redraw'); }
 
+        /**
+         * Recenter the camera only after loading the model.
+         * @type {boolean}
+         */
         get noAutoRecenter() { return this.hasAttribute('no-auto-recenter') || false; }
         set noAutoRecenter(val) { val ? this.setAttribute('no-auto-recenter', true) : this.removeAttribute('no-auto-recenter'); }
 
         get showCollision() { return this.hasAttribute('show-collision') || false; }
         set showCollision(val) { val ? this.setAttribute('show-collision', true) : this.removeAttribute('show-collision'); }
 
+        /**
+         * Sets or gets the jointValues of the robot as a dictionary of `joint-name` to `radian` pairs.
+         * @type {Object}
+         */
         get jointValues() {
 
             const values = {};
@@ -122,13 +174,13 @@
             const scene = new THREE__namespace.Scene();
 
             const ambientLight = new THREE__namespace.HemisphereLight(this.ambientColor, '#000');
-            ambientLight.groundColor.lerp(ambientLight.color, 0.5);
+            ambientLight.groundColor.lerp(ambientLight.color, 0.5 * Math.PI);
             ambientLight.intensity = 0.5;
             ambientLight.position.set(0, 1, 0);
             scene.add(ambientLight);
 
             // Light setup
-            const dirLight = new THREE__namespace.DirectionalLight(0xffffff);
+            const dirLight = new THREE__namespace.DirectionalLight(0xffffff, Math.PI);
             dirLight.position.set(4, 10, 1);
             dirLight.shadow.mapSize.width = 2048;
             dirLight.shadow.mapSize.height = 2048;
@@ -143,7 +195,7 @@
             renderer.setClearAlpha(0);
             renderer.shadowMap.enabled = true;
             renderer.shadowMap.type = THREE__namespace.PCFSoftShadowMap;
-            renderer.outputEncoding = THREE__namespace.sRGBEncoding;
+            renderer.outputColorSpace = THREE__namespace.SRGBColorSpace;
 
             // Camera setup
             const camera = new THREE__namespace.PerspectiveCamera(75, 1, 0.1, 1000);
@@ -154,8 +206,8 @@
             scene.add(world);
 
             const plane = new THREE__namespace.Mesh(
-                new THREE__namespace.PlaneBufferGeometry(40, 40),
-                new THREE__namespace.ShadowMaterial({ side: THREE__namespace.DoubleSide, transparent: true, opacity: 0.5 }),
+                new THREE__namespace.PlaneGeometry(40, 40),
+                new THREE__namespace.ShadowMaterial({ side: THREE__namespace.DoubleSide, transparent: true, opacity: 0.25 }),
             );
             plane.rotation.x = -Math.PI / 2;
             plane.position.y = -0.5;
@@ -329,11 +381,19 @@
 
         }
 
+        /**
+         * Dirty the renderer so the element will redraw next frame.
+         * @returns {void}
+         */
         redraw() {
 
             this._dirty = true;
         }
 
+        /**
+         * Recenter the camera to the model and redraw.
+         * @returns {void}
+         */
         recenter() {
 
             this._updateEnvironment();
@@ -343,12 +403,18 @@
 
         // Set the joint with jointName to
         // angle in degrees
-        setJointValue(jointName, ...values) {
+        /**
+         * Sets the given joint to the provided value(s). See URDFJoint.setJointValue.
+         * @param {string} jointName The name of the joint to set
+         * @param {...number|null} jointValues The value(s) to set
+         * @returns {void}
+         */
+        setJointValue(jointName, ...jointValues) {
 
             if (!this.robot) return;
             if (!this.robot.joints[jointName]) return;
 
-            if (this.robot.joints[jointName].setJointValue(...values)) {
+            if (this.robot.joints[jointName].setJointValue(...jointValues)) {
 
                 this.redraw();
                 this.dispatchEvent(new CustomEvent('angle-change', { bubbles: true, cancelable: true, detail: jointName }));
@@ -357,9 +423,26 @@
 
         }
 
+        /**
+         * Sets all joint names specified as keys to radian angle value.
+         * @param {Object} jointValueDictionary A dictionary of joint names to values
+         * @returns {void}
+         */
         setJointValues(values) {
 
-            for (const name in values) this.setJointValue(name, values[name]);
+            for (const name in values) {
+
+                if (Array.isArray(values[name])) {
+
+                    this.setJointValue(name, ...values[name]);
+
+                } else {
+
+                    this.setJointValue(name, values[name]);
+
+                }
+
+            }
 
         }
 
@@ -478,7 +561,7 @@
 
                                             if (m.map) {
 
-                                                m.map.encoding = THREE__namespace.GammaEncoding;
+                                                m.map.colorSpace = THREE__namespace.SRGBColorSpace;
 
                                             }
 
@@ -547,7 +630,7 @@
 
                 }
 
-                const loader = new URDFLoader__default['default'](manager);
+                const loader = new URDFLoader(manager);
                 loader.packages = pkg;
                 loader.loadMeshCb = this.loadMeshFunc;
                 loader.fetchOptions = { mode: 'cors', credentials: 'same-origin' };
@@ -638,9 +721,9 @@
 
         }
 
-    };
+    }
 
     return URDFViewer;
 
-})));
+}));
 //# sourceMappingURL=urdf-viewer-element.js.map
