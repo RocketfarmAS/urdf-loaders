@@ -312,6 +312,74 @@ describe('Options', () => {
 
     });
 
+    describe('queryStringOptions', () => {
+
+        const urdf = `
+            <robot>
+                <link name="Body">
+                    <visual>
+                        <geometry>
+                            <mesh filename="package://package1/path/to/model.stl" />
+                        </geometry>
+                    </visual>
+                </link>
+                <link name="Body2">
+                    <visual>
+                        <geometry>
+                            <mesh filename="relative/model2.dae" />
+                        </geometry>
+                    </visual>
+                </link>
+            </robot>
+        `;
+
+        it('should append the token registered for a mesh URL\'s prefix.', () => {
+
+            const loader = new URDFLoader();
+            loader.packages = { 'package1': 'https://store.example/descriptions/package1' };
+            loader.queryStringOptions = [
+                ['https://store.example/descriptions/', '?sig=descriptions'],
+                ['https://other.example/', '?sig=other'],
+            ];
+
+            const loaded = [];
+            loader.loadMeshCb = url => {
+
+                loaded.push(url);
+
+            };
+
+            loader.parse(urdf, 'https://other.example/robot/');
+            expect(loaded).toEqual([
+                'https://store.example/descriptions/package1/path/to/model.stl?sig=descriptions',
+                'https://other.example/robot/relative/model2.dae?sig=other',
+            ]);
+
+        });
+
+        it('should leave URLs without a registered prefix untouched.', () => {
+
+            const loader = new URDFLoader();
+            loader.packages = { 'package1': 'https://public.example/package1' };
+            loader.queryStringOptions = [['https://store.example/', '?sig=descriptions']];
+
+            const loaded = [];
+            loader.loadMeshCb = url => {
+
+                loaded.push(url);
+
+            };
+
+            loader.parse(urdf, 'https://public.example/robot/');
+            expect(loaded).toEqual([
+                'https://public.example/package1/path/to/model.stl',
+                'https://public.example/robot/relative/model2.dae',
+            ]);
+
+        });
+
+    });
+
 });
 
 describe('Clone', () => {
