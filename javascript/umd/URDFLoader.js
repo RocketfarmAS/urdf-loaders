@@ -714,6 +714,17 @@
 
     }
 
+    // Resolves query string parameters for any given paths that needs them
+    function resolveQueryString(path, queryStringOptions) {
+        for (const [key, token] of queryStringOptions) {
+            if (path.startsWith(key)) {
+                return token;
+            }
+        }
+
+        return '';
+    }
+
     /**
      * Function that returns a resolved path given a ROS package name.
      * @callback PackageResolver
@@ -780,7 +791,7 @@
             this.packages = '';
             this.workingPath = '';
             this.fetchOptions = {};
-
+            this.queryStringOptions = [];
         }
 
         /* Public API */
@@ -813,8 +824,9 @@
             // Check if a full URI is specified before
             // prepending the package info
             const manager = this.manager;
-            const workingPath = THREE__namespace.LoaderUtils.extractUrlBase(urdf);
-            const urdfPath = this.manager.resolveURL(urdf);
+            // If not set manually, then fetch.
+            const workingPath = ((this.workingPath === '') ? THREE__namespace.LoaderUtils.extractUrlBase(urdf) : this.workingPath);
+            const urdfPath = this.manager.resolveURL(urdf + resolveQueryString(urdf, this.queryStringOptions));
 
             manager.itemStart(urdfPath);
 
@@ -882,13 +894,15 @@
             const linkMap = {};
             const jointMap = {};
             const materialMap = {};
+            const queryStringOptions = this.queryStringOptions;
 
             // Resolves the path of mesh files
             function resolvePath(path) {
 
                 if (!/^package:\/\//.test(path)) {
 
-                    return workingPath ? workingPath + path : path;
+                    const plainURL = workingPath ? workingPath + path : path;
+                    return plainURL + resolveQueryString(plainURL, queryStringOptions);
 
                 }
 
@@ -901,25 +915,29 @@
                     if (packages.endsWith(targetPkg)) {
 
                         // "pkg" is the target package
-                        return packages + '/' + relPath;
+                        const plainURL = packages + '/' + relPath;
+                        return plainURL + resolveQueryString(plainURL, queryStringOptions);
 
                     } else {
 
                         // Assume "pkg" is the target package's parent directory
-                        return packages + '/' + targetPkg + '/' + relPath;
+                        const plainURL = packages + '/' + targetPkg + '/' + relPath;
+                        return plainURL + resolveQueryString(plainURL, queryStringOptions);
 
                     }
 
                 } else if (typeof packages === 'function') {
 
-                    return packages(targetPkg) + '/' + relPath;
+                    const plainURL = packages(targetPkg) + '/' + relPath;
+                    return plainURL + resolveQueryString(plainURL, queryStringOptions);
 
                 } else if (typeof packages === 'object') {
 
                     // "pkg" is a map of packages
                     if (targetPkg in packages) {
 
-                        return packages[targetPkg] + '/' + relPath;
+                        const plainURL = packages[targetPkg] + '/' + relPath;
+                        return plainURL + resolveQueryString(plainURL, queryStringOptions);
 
                     } else {
 
@@ -1251,7 +1269,6 @@
                             const loader = new THREE__namespace.TextureLoader(manager);
                             const filePath = resolvePath(filename);
                             material.map = loader.load(filePath);
-                            material.map.colorSpace = THREE__namespace.SRGBColorSpace;
 
                         }
 
@@ -1397,7 +1414,31 @@
         // Default mesh loading function
         defaultMeshLoader(path, manager, material, done) {
 
-            if (/\.stl$/i.test(path)) {
+            manager.setURLModifier((url) => {
+                const qParam = new URL(url).searchParams;
+
+                // Check if the URL requires a SAS token
+                if (
+                    // Url is registered for SAS token and ...
+                    this.queryStringOptions.find(([key]) => url.startsWith(key)) &&
+                    // SAS token isn't already present
+                    !(
+                        qParam.get('sv') ||
+                        qParam.get('st') ||
+                        qParam.get('se') ||
+                        qParam.get('sr') ||
+                        qParam.get('sp') ||
+                        qParam.get('sig')
+                    )
+                ) {
+                    // Append the SAS token to the URL
+                    return url + resolveQueryString(url, this.queryStringOptions);
+                }
+                // Return the original or modified URL
+                return url;
+            });
+
+            if (/\.stl/i.test(path)) {
 
                 const loader = new STLLoader_js.STLLoader(manager);
                 loader.load(path, geom => {
@@ -1405,7 +1446,7 @@
                     done(mesh);
                 }, null, err => done(null, err));
 
-            } else if (/\.dae$/i.test(path)) {
+            } else if (/\.dae/i.test(path)) {
 
                 const loader = new ColladaLoader_js.ColladaLoader(manager);
                 loader.load(path, dae => done(dae.scene), null, err => done(null, err));
