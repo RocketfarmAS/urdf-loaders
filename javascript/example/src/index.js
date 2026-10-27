@@ -238,7 +238,7 @@ viewer.addEventListener('urdf-processed', () => {
 
 document.addEventListener('WebComponentsReady', () => {
 
-    viewer.loadMeshFunc = (path, manager, done) => {
+    viewer.loadMeshFunc = (path, manager, material, done) => {
 
         const ext = path.split(/\./g).pop().toLowerCase();
         switch (ext) {
@@ -255,7 +255,14 @@ document.addEventListener('WebComponentsReady', () => {
             case 'obj':
                 new OBJLoader(manager).load(
                     path,
-                    result => done(result),
+                    result => {
+                        result.traverse(c => {
+                            if (c.material) {
+                                c.material = material;
+                            }
+                        });
+                        done(result);
+                    },
                     null,
                     err => done(null, err),
                 );
@@ -272,7 +279,6 @@ document.addEventListener('WebComponentsReady', () => {
                 new STLLoader(manager).load(
                     path,
                     result => {
-                        const material = new THREE.MeshPhongMaterial();
                         const mesh = new THREE.Mesh(result, material);
                         done(mesh);
                     },
@@ -306,7 +312,19 @@ const updateAngles = () => {
 
     // reset everything to 0 first
     const resetJointValues = viewer.angles;
-    for (const name in resetJointValues) resetJointValues[name] = 0;
+    for (const name in resetJointValues) {
+
+        if (Array.isArray(resetJointValues[name])) {
+
+            resetJointValues[name].fill(0);
+
+        } else {
+
+            resetJointValues[name] = 0;
+
+        }
+
+    }
     viewer.setJointValues(resetJointValues);
 
     // animate the legs

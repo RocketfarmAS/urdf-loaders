@@ -1,52 +1,68 @@
 import { Object3D, Vector3 } from 'three';
 
-export interface URDFCollider extends Object3D {
+declare class URDFBase extends Object3D {
+
+    urdfNode: Element | null;
+    urdfName: string;
+
+}
+
+export class URDFCollider extends URDFBase {
 
     isURDFCollider: true;
-    urdfNode: Element | null;
 
 }
 
-export interface URDFVisual extends Object3D {
+export class URDFVisual extends URDFBase {
 
     isURDFVisual: true;
-    urdfNode: Element | null;
 
 }
 
-export interface URDFLink extends Object3D {
+export interface URDFInertial {
+
+    mass: number;
+    origin: { xyz: number[], rpy: number[] };
+    inertia: {
+        ixx: number; ixy: number; ixz: number;
+        iyy: number; iyz: number; izz: number;
+    };
+
+}
+
+export class URDFLink extends URDFBase {
 
     isURDFLink: true;
-    urdfNode: Element | null;
+    inertial: URDFInertial;
 
 }
 
-export interface URDFJoint extends Object3D {
+export class URDFJoint extends URDFBase {
 
     isURDFJoint: true;
 
     urdfNode: Element | null;
     axis: Vector3;
     jointType: 'fixed' | 'continuous' | 'revolute' | 'planar' | 'prismatic' | 'floating';
-    angle: Number;
-    jointValue: Number[];
-    limit: { lower: Number, upper: Number }; // TODO: add more
-    ignoreLimits: Boolean;
+    angle: number;
+    jointValue: number[];
+    limit: { lower: number, upper: number, effort: number, velocity: number };
+    ignoreLimits: boolean;
     mimicJoints: URDFMimicJoint[];
 
     setJointValue(...values: (number | null)[]): boolean;
 
 }
 
-export interface URDFMimicJoint extends URDFJoint {
+export class URDFMimicJoint extends URDFJoint {
 
-    mimicJoint : String;
-    offset: Number;
-    multiplier: Number;
+    mimicJoint: string;
+    offset: number;
+    multiplier: number;
 
 }
 
-export interface URDFRobot extends URDFLink {
+export class URDFRobot extends URDFLink {
 
     isURDFRobot: true;
 
@@ -59,8 +75,8 @@ export interface URDFRobot extends URDFLink {
     visual: { [ key: string ]: URDFVisual };
     frames: { [ key: string ]: Object3D };
 
-    setJointValue(jointName: String, ...values: number[]): boolean;
-    setJointValues(values: { [ key: string ]: Number | Number[] }): boolean;
-    getFrame(name: String): Object3D;
+    setJointValue(jointName: string, ...values: number[]): boolean;
+    setJointValues(values: { [ key: string ]: number | number[] }): boolean;
+    getFrame(name: string): Object3D;
 
 }

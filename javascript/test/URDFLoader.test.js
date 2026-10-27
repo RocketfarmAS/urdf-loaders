@@ -1,5 +1,5 @@
 import { JSDOM } from 'jsdom';
-import { Mesh, Color } from 'three';
+import { Mesh, Group, Color, BufferGeometry } from 'three';
 import fetch from 'node-fetch';
 import URDFLoader from '../src/URDFLoader.js';
 
@@ -12,7 +12,7 @@ global.Element = window.Element;
 global.XMLHttpRequest = window.XMLHttpRequest;
 global.fetch = fetch;
 
-function emptyLoadMeshCallback(url, manager, done) {
+function emptyLoadMeshCallback(url, manager, material, done) {
 
     done(new Mesh());
 
@@ -82,7 +82,7 @@ function compareRobots(ra, rb) {
 
 }
 
-describe.skip('File Argument', () => {
+describe('File Argument', () => {
 
     it('should work if the file is already parsed', async() => {
 
@@ -180,7 +180,7 @@ describe('Options', () => {
 
             const loader = new URDFLoader();
             loader.packages = 'https://raw.githubusercontent.com/gkjohnson/urdf-loaders/master/urdf/TriATHLETE_Climbing';
-            loader.loadMeshCb = (path, manager, done) => {
+            loader.loadMeshCb = (path, manager, material, done) => {
 
                 const mesh = new Mesh();
                 mesh.fromCallback = true;
@@ -202,6 +202,33 @@ describe('Options', () => {
 
             expect(fromCallbackCount).toEqual(28);
 
+        });
+
+        it('should use correct workingPath to load meshes', async() => {
+
+            const loader = new URDFLoader();
+
+            loader.workingPath = 'https://raw.githubusercontent.com/mock-working-path';
+            loader.loadMeshCb = (path, manager, material, done) => {
+
+                const mesh = new Mesh();
+                expect(path).toContain('https://raw.githubusercontent.com/mock-working-path');
+                done(mesh);
+
+            };
+            await loader.loadAsync('https://raw.githubusercontent.com/gkjohnson/urdf-loaders/master/urdf/TriATHLETE_Climbing/urdf/TriATHLETE.URDF');
+
+            loader.workingPath = '';
+            loader.loadMeshCb = (path, manager, material, done) => {
+
+                const mesh = new Mesh();
+                expect(path).toContain('https://raw.githubusercontent.com/gkjohnson/urdf-loaders/master/urdf/TriATHLETE_Climbing/urdf');
+                done(mesh);
+
+            };
+            await loader.loadAsync('https://raw.githubusercontent.com/gkjohnson/urdf-loaders/master/urdf/TriATHLETE_Climbing/urdf/TriATHLETE.URDF');
+
+            expect(loader.workingPath).toBe('');
         });
 
     });
@@ -279,6 +306,74 @@ describe('Options', () => {
             expect(loaded).toEqual([
                 'func/path/1/path/to/model.stl',
                 'func/path/2/path/to/model2.stl',
+            ]);
+
+        });
+
+    });
+
+    describe('queryStringOptions', () => {
+
+        const urdf = `
+            <robot>
+                <link name="Body">
+                    <visual>
+                        <geometry>
+                            <mesh filename="package://package1/path/to/model.stl" />
+                        </geometry>
+                    </visual>
+                </link>
+                <link name="Body2">
+                    <visual>
+                        <geometry>
+                            <mesh filename="relative/model2.dae" />
+                        </geometry>
+                    </visual>
+                </link>
+            </robot>
+        `;
+
+        it('should append the token registered for a mesh URL\'s prefix.', () => {
+
+            const loader = new URDFLoader();
+            loader.packages = { 'package1': 'https://store.example/descriptions/package1' };
+            loader.queryStringOptions = [
+                ['https://store.example/descriptions/', '?sig=descriptions'],
+                ['https://other.example/', '?sig=other'],
+            ];
+
+            const loaded = [];
+            loader.loadMeshCb = url => {
+
+                loaded.push(url);
+
+            };
+
+            loader.parse(urdf, 'https://other.example/robot/');
+            expect(loaded).toEqual([
+                'https://store.example/descriptions/package1/path/to/model.stl?sig=descriptions',
+                'https://other.example/robot/relative/model2.dae?sig=other',
+            ]);
+
+        });
+
+        it('should leave URLs without a registered prefix untouched.', () => {
+
+            const loader = new URDFLoader();
+            loader.packages = { 'package1': 'https://public.example/package1' };
+            loader.queryStringOptions = [['https://store.example/', '?sig=descriptions']];
+
+            const loaded = [];
+            loader.loadMeshCb = url => {
+
+                loaded.push(url);
+
+            };
+
+            loader.parse(urdf, 'https://public.example/robot/');
+            expect(loaded).toEqual([
+                'https://public.example/package1/path/to/model.stl',
+                'https://public.example/robot/relative/model2.dae',
             ]);
 
         });
@@ -368,7 +463,7 @@ describe('Load', () => {
             </robot>
         `;
 
-        loader.loadMeshCb = (path, manager, done) => done(null, new Error('Deliberate Test Error'));
+        loader.loadMeshCb = (path, manager, material, done) => done(null, new Error('Deliberate Test Error'));
         loader.parse(urdf);
 
     });
@@ -405,6 +500,50 @@ describe('Material Tags', () => {
 
     });
 
+    it('should apply URDF material to child meshes when loadMeshCb returns a Group.', () => {
+
+        const loader = new URDFLoader();
+        loader.loadMeshCb = (path, manager, material, done) => {
+
+            const group = new Group();
+            group.add(new Mesh(new BufferGeometry(), material));
+            group.add(new Mesh(new BufferGeometry(), material));
+            done(group);
+
+        };
+
+        const res = loader.parse(`
+            <robot name="TEST">
+                <material name="Cyan">
+                    <color rgba="0 1.0 1.0 1.0"/>
+                </material>
+                <link name="LINK">
+                    <visual>
+                        <geometry>
+                            <mesh filename="package://meshes/link.obj" />
+                        </geometry>
+                        <material name="Cyan"/>
+                    </visual>
+                </link>
+            </robot>
+        `);
+
+        const visual = res.children[0].children[0];
+        const group = visual.children[0];
+
+        group.traverse(child => {
+
+            if (child instanceof Mesh) {
+
+                expect(child.material.name).toEqual('Cyan');
+                expect(child.material.color).toEqual(new Color(0, 1, 1).convertSRGBToLinear());
+
+            }
+
+        });
+
+    });
+
     it('should parse transparent materials correctly.', () => {
 
         const loader = new URDFLoader();
@@ -435,7 +574,7 @@ describe('Material Tags', () => {
 
 });
 
-describe.skip('TriATHLETE Climbing URDF', () => {
+describe('TriATHLETE Climbing URDF', () => {
 
     let robot;
     beforeEach(async() => {

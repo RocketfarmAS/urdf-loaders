@@ -7,7 +7,6 @@ import {
     ShadowMaterial,
     DirectionalLight,
     PCFSoftShadowMap,
-    sRGBEncoding,
     Color,
     AmbientLight,
     Box3,
@@ -54,7 +53,6 @@ function init() {
     workspace.add(camera);
 
     renderer = new WebGLRenderer({ antialias: true });
-    renderer.outputEncoding = sRGBEncoding;
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = PCFSoftShadowMap;
     document.body.appendChild(renderer.domElement);
@@ -114,13 +112,13 @@ function init() {
     renderer.setAnimationLoop(render);
     document.body.appendChild(VRButton.createButton(renderer));
 
-    const directionalLight = new DirectionalLight(0xffffff, 1.0);
+    const directionalLight = new DirectionalLight(0xffffff, 3.0);
     directionalLight.castShadow = true;
     directionalLight.shadow.mapSize.setScalar(2048);
     directionalLight.position.set(5, 30, 5);
     scene.add(directionalLight);
 
-    const ambientLight = new AmbientLight(0xffb74d, 0.5);
+    const ambientLight = new AmbientLight(0xffb74d, 1.0);
     scene.add(ambientLight);
 
     ground = new Mesh(new PlaneGeometry(), new ShadowMaterial({ opacity: 0.1 }));
@@ -131,7 +129,7 @@ function init() {
 
     const manager = new LoadingManager();
     const loader = new URDFLoader(manager);
-    loader.loadMeshCb = function(path, manager, onComplete) {
+    loader.loadMeshCb = function(path, manager, material, onComplete) {
         const ext = path.split(/\./g).pop().toLowerCase();
 
         switch (ext) {
@@ -145,7 +143,7 @@ function init() {
                 );
                 break;
             default:
-                loader.defaultMeshLoader(path, manager, onComplete);
+                loader.defaultMeshLoader(path, manager, material, onComplete);
 
         }
 
